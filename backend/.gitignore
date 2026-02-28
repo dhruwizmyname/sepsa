@@ -1,0 +1,15 @@
+# Node & Next.js
+node_modules/
+.next/
+
+# Python
+__pycache__/
+*.pyc
+
+# Personal Photos & Database (Crucial for privacy)
+backend/known_faces/
+backend/storage/
+*.pkl
+
+# Environment Variables
+.env
