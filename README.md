@@ -1,41 +1,52 @@
-# EventSnap 📸  
-**AI-Powered Smart Event Photo Sharing Application**
+# EventSnap 📸
+**An AI-Powered Smart Event Photo Sharing Application**
 
-EventSnap ek intelligent platform hai jo facial recognition ka use karke event photos ko automatically organize aur share karta hai. 
+EventSnap is an intelligent photo management platform designed to streamline the way event memories are shared. Utilizing advanced facial recognition, the application automatically organizes galleries, ensuring users only see the photos they appear in, thereby eliminating the manual effort of searching through large event datasets.
+
+---
 
 ## 🚀 Key Features
-* **Neural Search Engine**: Facial recognition (DeepFace/OpenCV) ka use karke photos mein faces detect karta hai.
-* **3-Step Smart Login**: Phone OTP aur Selfie-based identity verification system.
-* **Photographer Dashboard**: Events create karne, photos upload karne, aur clients manage karne ke liye dedicated interface.
-* **Automated Privacy**: Clients ko sirf wahi photos dikhti hain jisme unka face detect hota hai.
+
+* **Neural Search Engine**: Implements a high-performance facial recognition engine using DeepFace/OpenCV to detect and index faces within event uploads.
+* **Intelligent Authentication**: A secure 3-step login flow featuring Mobile OTP and Selfie-based identity verification for automated photo matching.
+* **Photographer Dashboard**: A comprehensive management interface for professionals to create events, manage client lists, and monitor upload statistics.
+* **Automated Privacy**: Sophisticated filtering logic that provides clients with personalized galleries containing only their identified images.
 
 ## 🛠 Tech Stack
+
 * **Frontend**: Next.js 16 (Turbopack), Tailwind CSS, Lucide Icons.
 * **Backend**: Python (FastAPI), Uvicorn.
-* **Database/Storage**: Metadata JSON & Local Storage.
-* **DevOps**: Docker & Docker Compose.
+* **Containerization**: Docker & Docker Compose for seamless environment orchestration.
+* **DevOps**: Automated PowerShell setup scripts for rapid deployment and dependency synchronization.
 
 ## 📦 Getting Started
 
 ### Prerequisites
 * Docker & Docker Compose installed.
-* Node.js (optional, for local linting).
+* Git installed for version control.
 
-### Installation & Setup
-1.  Repository clone karein:
+### Installation
+1.  **Clone the Repository**:
     ```bash
     git clone [https://github.com/dhruwizmyname/sepsa.git](https://github.com/dhruwizmyname/sepsa.git)
     cd sepsa
     ```
-2.  Hamari custom setup script run karein (Windows PowerShell):
+2.  **Initialize the Environment**:
+    Run the custom automation script to build containers and sync UI dependencies:
     ```powershell
     .\setup.ps1
     ```
-    *Ye script containers build karegi aur saare dependencies install kar degi.*
 
-## 🐳 Docker Services
-* **Frontend**: `http://localhost:3000`
-* **Backend**: `http://localhost:8000`
+## 🐳 Architecture
+[Image of Docker Compose architecture diagram showing services, volumes, and network connections]
 
-## 👨‍💻 Author
-**Dhruw** *Executive M.Tech in Data Science & Data Analytics, IIT Bhilai*.
+* **Frontend Service**: Accessible at `http://localhost:3000`
+* **Backend Service**: Accessible at `http://localhost:8000`
+
+---
+
+## 🎓 Academic Context
+This project is developed as part of professional growth during the **Executive M.Tech in Data Science and Data Analytics at IIT Bhilai**. It demonstrates the practical application of Big Data technologies and Neural Networks in a real-world software product.
+
+## 👤 Author
+**Dhruw** *IT Analyst & Data Science Candidate, IIT Bhilai*
