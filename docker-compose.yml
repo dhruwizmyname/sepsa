@@ -1,20 +1,42 @@
+<<<<<<< HEAD
+=======
+version: '3.8'
+>>>>>>> 2b00d43e24ddfb811e85ec2f6ce0c3ae9e4c1c1b
 services:
   backend:
     build: ./backend
     ports:
       - "8000:8000"
     volumes:
+<<<<<<< HEAD
       - ./backend:/app
       - ./backend/storage:/app/storage # This maps your Windows folder to Docker
+=======
+      - ./backend:/app  # This allows you to edit code in VS Code and see changes live
+    environment:
+      - PYTHONUNBUFFERED=1
+>>>>>>> 2b00d43e24ddfb811e85ec2f6ce0c3ae9e4c1c1b
 
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
+<<<<<<< HEAD
     volumes:
       - ./frontend:/app
       - /app/node_modules   # <--- Add this "Shadow Volume" line
       - /app/.next           # <--- Add this to keep the cache in Linux too
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+=======
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # <--- THIS IS THE MAGIC LINE
+      - /app/.next          # <--- AND THIS ONE
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+>>>>>>> 2b00d43e24ddfb811e85ec2f6ce0c3ae9e4c1c1b
       - WATCHPACK_POLLING=true
