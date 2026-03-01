@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Camera, ArrowLeft, Download, Heart, Sparkles, Grid3x3, Eye } from 'lucide-react';
-import Masonry, { ResponsiveMasonry } from 'react-responsive-masonry';
+import Masonry, { ResponsiveMasonry } from 'react-respive-masonry';
 import { useAuth } from '../contexts/AuthContext';
 
 // Mock photos data

@@ -44,16 +44,31 @@ export default function PhotographerDashboard() {
     );
   };
 
-  const handleCreateEvent = () => {
-    if (eventName && eventDate && selectedClients.length > 0 && uploadedPhotos.length > 0) {
-      alert(`Event "${eventName}" created successfully with ${uploadedPhotos.length} photos for ${selectedClients.length} clients!`);
-      setEventName('');
-      setEventDate('');
-      setSelectedClients([]);
-      setUploadedPhotos([]);
-      setShowUploadForm(false);
+ // Replace your current create event function with this:
+const handleCreateEvent = async (eventName) => {
+  try {
+    const response = await fetch("http://localhost:8000/api/events/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      // Make sure the key matches the FastAPI Pydantic model exactly
+      body: JSON.stringify({ event_name: eventName }), 
+    });
+
+    const data = await response.json();
+
+    if (data.status === "success") {
+      alert(`🎉 Success! ${data.message}`);
+      // Add logic here to close your modal and refresh the event list
+    } else {
+      alert(`⚠️ Error: ${data.message}`);
     }
-  };
+  } catch (error) {
+    console.error("Error connecting to backend:", error);
+    alert("Backend connection failed. Is Docker running?");
+  }
+};
 
   const handleLogout = () => {
     // In a real app, clear tokens here
@@ -336,3 +351,4 @@ export default function PhotographerDashboard() {
     </div>
   );
 }
+
