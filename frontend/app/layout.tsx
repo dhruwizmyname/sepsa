@@ -1,5 +1,7 @@
-import "./globals.css";
 import type { Metadata } from "next";
+import "./globals.css";
+// 1. AuthProvider ko import kiya
+import { AuthProvider } from './contexts/AuthContext';
 
 export const metadata: Metadata = {
   title: "EventSnap AI",
@@ -14,7 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        {/* 2. Provider ko body ke andar aur children ke bahar lapet diya */}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

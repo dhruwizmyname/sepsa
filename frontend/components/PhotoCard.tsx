@@ -1,24 +1,28 @@
-import React from "react";
+interface PhotoProps {
+  filename: string;
+  isDhruw: boolean;
+}
 
-export default function PhotoCard({ filename, isDhruw = false }: { filename: string, isDhruw: boolean }) {
+export default function PhotoCard({ filename, isDhruw }: PhotoProps) {
   return (
-    <div className="relative break-inside-avoid rounded-3xl overflow-hidden border border-zinc-900 bg-zinc-950 group transition-all duration-700 hover:border-zinc-700">
+    <div className="relative group overflow-hidden rounded-3xl bg-white shadow-md hover:shadow-xl transition-all border border-slate-100">
       <img 
-        src={`http://localhost:8000/view_photos/${filename}`} 
-        className="w-full h-auto grayscale group-hover:grayscale-0 transition-all duration-700"
-        alt="Event"
-        loading="lazy"
+        src={`http://localhost:8000/photos/${filename}`} 
+        alt="Event" 
+        className="w-full h-auto object-cover grayscale-[0.3] group-hover:grayscale-0 transition-all duration-500"
       />
       
-      {/* HUD Overlay */}
-      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
-        <span className="text-[10px] font-mono text-zinc-500 mb-1">{filename}</span>
-        {isDhruw && (
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[11px] font-black text-white tracking-widest uppercase">Verified Identity</span>
-          </div>
-        )}
+      {/* AI Magic Badge */}
+      {isDhruw && (
+        <div className="absolute top-4 left-4 bg-yellow-400/90 backdrop-blur-sm text-yellow-900 text-[10px] font-black px-3 py-1.5 rounded-full shadow-lg border border-white/50 animate-bounce">
+          ✨ AI MATCH FOUND
+        </div>
+      )}
+
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
+        <button className="bg-white/20 backdrop-blur-md text-white border border-white/30 w-full py-3 rounded-2xl font-bold text-xs hover:bg-white hover:text-black transition-colors">
+          Download Original
+        </button>
       </div>
     </div>
   );
