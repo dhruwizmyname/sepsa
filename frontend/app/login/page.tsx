@@ -1,329 +1,264 @@
 "use client";
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, Phone, Shield, Upload, ArrowRight } from 'lucide-react';
+import { Camera, Phone, Lock, Sparkles, Loader2, Mail, UserSquare2, Upload, UserCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function Login() {
+export default function LoginPage() {
   const router = useRouter();
+  const { login, phone, role, loading } = useAuth();
   
-  // -- Auth Context --
-  const { login: executeLogin } = useAuth();
+  const [loginMode, setLoginMode] = useState<'user' | 'photographer'>('user');
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  // -- States --
-  const [step, setStep] = useState<'phone' | 'otp' | 'selfie'>('phone');
-  const [loading, setLoading] = useState(false);
-  
-  // User States
-  const [phone, setPhone] = useState('');
+  // --- USER STATES ---
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null); 
+  const [step, setStep] = useState(1); // 1: Phone, 2: OTP, 3: Selfie Upload
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Photographer States
-  const [isPhotographerMode, setIsPhotographerMode] = useState(false);
+  // --- PHOTOGRAPHER STATES ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // 🛡️ Gatekeeper
+  useEffect(() => {
+    if (!loading && phone && role) {
+      router.push(role === 'photographer' ? '/photographer' : '/dashboard');
+    }
+  }, [phone, role, loading, router]);
 
   // ==========================================
   // USER LOGIN LOGIC
   // ==========================================
-  const handlePhoneSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (phone.length >= 10) {
-      setStep('otp'); 
-    }
+  const handleSendOTP = async () => {
+    if (phoneNumber.length < 10) return alert("Valid 10-digit number dalo bhai!");
+    setStep(2);
   };
 
-  const handleOtpComplete = async (value: string) => {
-    const cleanValue = value.replace(/[^0-9]/g, '').slice(0, 6);
-    setOtp(cleanValue);
-    
-    if (cleanValue.length === 6) {
-      try {
-        const res = await fetch(`http://localhost:8000/api/auth/check-user/${phone}`);
-        const data = await res.json();
+  const handleVerifyOTP = async () => {
+    setLoggingIn(true);
+    try {
+      // 1. Check if user already exists in backend
+      const res = await fetch(`http://localhost:8000/api/auth/check-user/${phoneNumber}`);
+      const data = await res.json();
 
-        if (data.exists) {
-          localStorage.setItem("userPhone", phone);
-          localStorage.setItem("userRole", "user");
-          executeLogin(phone, "user"); 
-          
-          window.location.href = '/dashboard'; 
-        } else {
-          setStep('selfie');
-        }
-      } catch (err) {
-        console.error("Failed to check user", err);
-        setStep('selfie'); 
+      if (data.exists) {
+        // Purana user hai, seedha login karo
+        login(phoneNumber, 'user');
+      } else {
+        // Naya user hai, selfie mangni padegi
+        setStep(3);
       }
+    } catch (err) {
+      console.error(err);
+      alert("Verification failed. Backend running hai?");
+    } finally {
+      setLoggingIn(false);
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
+  // --- SELFIE UPLOAD LOGIC ---
+  const handleSelfieSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelfieFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelfiePreview(reader.result as string);
-      };
-      reader.readAsDataURL(selectedFile);
+      reader.onloadend = () => setPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSelfieSubmit = async () => {
-    if (!file) return;
-    setLoading(true);
-
-    const formData = new FormData();
-    formData.append("phone", phone);
-    formData.append("selfie", file);
-
+    if (!selfieFile) return;
+    setLoggingIn(true);
     try {
+      const formData = new FormData();
+      formData.append("phone", phoneNumber);
+      formData.append("selfie", selfieFile);
+
       const res = await fetch("http://localhost:8000/api/auth/verify-selfie", {
         method: "POST",
         body: formData,
       });
 
       if (res.ok) {
-        localStorage.setItem("userPhone", phone);
-        localStorage.setItem("userRole", "user");
-        executeLogin(phone, "user"); 
-        
-        window.location.href = '/dashboard'; 
+        // Selfie save ho gayi, ab login complete karo
+        login(phoneNumber, 'user');
       } else {
-        alert("Face could not be detected. Try a clear, straight photo.");
-        setSelfiePreview(null);
+        alert("❌ Face not clear. Please upload a clear selfie.");
+        setSelfieFile(null);
+        setPreviewUrl(null);
       }
     } catch (err) {
-      console.error("Upload failed", err);
-      alert("Backend connection failed.");
+      console.error(err);
+      alert("Failed to upload selfie.");
     } finally {
-      setLoading(false);
+      setLoggingIn(false);
     }
   };
 
   // ==========================================
-  // 2. PHOTOGRAPHER LOGIN LOGIC
+  // PHOTOGRAPHER LOGIN LOGIC
   // ==========================================
-  const handlePhotoLoginSubmit = async (e: React.FormEvent) => {
+  const handlePhotographerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    
-    const formData = new FormData();
-    formData.append("email", email);
-    formData.append("password", password);
-
+    setLoggingIn(true);
     try {
-      const res = await fetch("http://localhost:8000/api/auth/photographer-login", {
+      const formData = new FormData();
+      formData.append("email", email);
+      formData.append("password", password);
+
+      const response = await fetch("http://localhost:8000/api/auth/photographer-login", {
         method: "POST",
         body: formData,
       });
 
-      const data = await res.json();
-      
-      if (res.ok) {
-        // Photographer User
-        localStorage.setItem("userPhone", email);
-        localStorage.setItem("userRole", "photographer"); 
-        
-        executeLogin(email, "photographer");
-        
-        // 👇 YAHAN '/photographer' KAR DIYA HAI 👇
-        window.location.href = '/photographer'; 
+      const data = await response.json();
+
+      if (response.ok && data.status === "success") {
+        login(email, 'photographer');
       } else {
-        alert(data.detail || "Login failed! Check your email/password.");
+        alert("❌ Invalid email or password");
       }
-    } catch (err) {
-      console.error("Connection Error:", err);
-      alert("Backend se connection nahi ho paa raha hai.");
+    } catch (error) {
+      console.error("Login Error:", error);
+      alert("Backend connection failed.");
     } finally {
-      setLoading(false);
+      setLoggingIn(false);
     }
   };
 
-  // ==========================================
-  // UI RENDER
-  // ==========================================
+  if (loading) return <div className="h-screen flex items-center justify-center">Checking Session...</div>;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-6 font-['Inter',sans-serif]">
-      <div className="absolute top-20 left-10 w-72 h-72 bg-[#2563eb] rounded-full blur-[120px] opacity-20"></div>
-      <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400 rounded-full blur-[120px] opacity-15"></div>
-
-      <div className="relative w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/60 backdrop-blur-lg shadow-lg border border-white/40 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] flex items-center justify-center shadow-md">
-              <Camera className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-semibold text-gray-900">EventSnap</span>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 font-['Inter',sans-serif]">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] flex items-center justify-center shadow-xl mb-4">
+            <Camera className="w-8 h-8 text-white" />
           </div>
+          <h1 className="text-3xl font-bold text-gray-900">EventSnap AI</h1>
+          <p className="text-gray-500 mt-2">Relive your moments instantly</p>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100 z-10 relative">
-          
-          {/* PHONE / EMAIL STEP */}
-          {step === 'phone' && (
-            <div className="space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-[#2563eb]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  {isPhotographerMode ? <Shield className="w-8 h-8 text-[#2563eb]" /> : <Phone className="w-8 h-8 text-[#2563eb]" />}
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {isPhotographerMode ? "Photographer Login" : "Welcome Back"}
-                </h2>
-                <p className="text-gray-600">
-                  {isPhotographerMode ? "Enter credentials to manage events" : "Enter mobile number to continue"}
-                </p>
-              </div>
+        {/* Mode Toggle (Hide during Selfie step) */}
+        {step < 3 && (
+          <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
+            <button
+              onClick={() => setLoginMode('user')}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
+                loginMode === 'user' ? 'bg-white text-[#2563eb] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Guest / User
+            </button>
+            <button
+              onClick={() => setLoginMode('photographer')}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
+                loginMode === 'photographer' ? 'bg-white text-[#2563eb] shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Photographer
+            </button>
+          </div>
+        )}
 
-              <form onSubmit={isPhotographerMode ? handlePhotoLoginSubmit : handlePhoneSubmit} className="space-y-4">
-                {isPhotographerMode ? (
-                  <>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Email Address"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] text-gray-900"
-                      required
-                    />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Password"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] text-gray-900"
-                      required
-                    />
-                  </>
-                ) : (
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 0000000000"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] text-gray-900"
-                    required
-                  />
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                  {loading ? "Verifying..." : (isPhotographerMode ? "Login" : "Send OTP")}
-                  {!loading && <ArrowRight className="w-4 h-4" />}
-                </button>
-              </form>
-              
-              {!isPhotographerMode && (
-                <button
-                  type="button"
-                  onClick={() => setIsPhotographerMode(true)}
-                  className="w-full py-3 px-4 rounded-xl bg-gray-100 text-gray-600 text-sm hover:bg-gray-200 transition-all font-medium"
-                >
-                  Are you a Photographer? Login here
-                </button>
-              )}
-              
-              {isPhotographerMode && (
-                <button
-                  type="button"
-                  onClick={() => setIsPhotographerMode(false)}
-                  className="w-full text-blue-600 text-sm font-medium hover:underline"
-                >
-                  Back to User Login
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* OTP STEP */}
-          {step === 'otp' && (
-            <div className="space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-[#2563eb]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-8 h-8 text-[#2563eb]" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">Verify OTP</h2>
-                <p className="text-gray-600">
-                  Enter the 6-digit code sent to<br />
-                  <span className="font-medium text-gray-900">{phone}</span>
-                </p>
-              </div>
-
-              <div className="flex justify-center">
-                <input 
-                  type="text"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => handleOtpComplete(e.target.value)}
-                  placeholder="000000"
-                  className="w-full max-w-[200px] text-center text-3xl font-bold tracking-[0.5em] px-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:border-[#2563eb] text-gray-900"
-                />
-              </div>
-
-              <button
-                onClick={() => setStep('phone')}
-                className="w-full py-3 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium transition-all"
-              >
-                Back
-              </button>
-            </div>
-          )}
-
-          {/* SELFIE STEP */}
-          {step === 'selfie' && (
-            <div className="space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-[#2563eb]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Camera className="w-8 h-8 text-[#2563eb]" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900">Upload Your Photo</h2>
-                <p className="text-gray-600 text-sm">
-                  Our AI will scan event photos and show you only the ones you're in!
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {selfiePreview ? (
+        <div className="bg-gray-50 p-8 rounded-3xl border border-gray-100 shadow-sm">
+          {loginMode === 'user' ? (
+            /* USER LOGIN FLOW */
+            step === 1 ? (
+              <div className="space-y-6 animate-in fade-in">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
                   <div className="relative">
-                    <img src={selfiePreview} alt="Selfie preview" className="w-full aspect-square object-cover rounded-2xl border-4 border-[#2563eb]/20" />
-                    <button onClick={() => setSelfiePreview(null)} className="absolute top-4 right-4 p-3 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg">
-                      <Upload className="w-5 h-5" />
-                    </button>
+                    <Phone className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                    <input type="tel" placeholder="Enter 10 digit number" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none text-gray-900 bg-white" />
                   </div>
-                ) : (
-                  <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center cursor-pointer hover:border-[#2563eb] hover:bg-[#2563eb]/5 transition-all">
-                    <Camera className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-900 font-bold mb-2">Click to upload or take a photo</p>
-                    <p className="text-sm text-gray-500">JPG, PNG up to 5MB</p>
-                  </div>
-                )}
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
-              </div>
-
-              {selfiePreview && (
-                <button onClick={handleSelfieSubmit} disabled={loading} className="w-full py-4 px-4 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70">
-                  {loading ? "Processing AI..." : "Complete Setup & Find My Photos"}
-                  {!loading && <ArrowRight className="w-5 h-5" />}
+                </div>
+                <button onClick={handleSendOTP} className="w-full py-4 bg-[#2563eb] text-white rounded-xl font-bold shadow-lg hover:bg-[#1d4ed8] transition-all">
+                  Send Verification Code
                 </button>
-              )}
+              </div>
+            ) : step === 2 ? (
+              <div className="space-y-6 animate-in slide-in-from-right-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Enter OTP</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                    <input type="text" placeholder="Enter 6-digit code" value={otp} onChange={(e) => setOtp(e.target.value)} className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none text-gray-900 bg-white" />
+                  </div>
+                </div>
+                <button onClick={handleVerifyOTP} disabled={loggingIn} className="w-full py-4 bg-black text-white rounded-xl font-bold shadow-lg hover:bg-gray-800 transition-all flex items-center justify-center gap-2">
+                  {loggingIn ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  {loggingIn ? 'Verifying...' : 'Verify OTP'}
+                </button>
+                <button onClick={() => setStep(1)} className="w-full text-sm text-[#2563eb] hover:underline font-medium">Change Phone Number</button>
+              </div>
+            ) : (
+              /* STEP 3: SELFIE UPLOAD */
+              <div className="space-y-6 animate-in slide-in-from-right-4">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <UserCheck className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Let AI Find You</h3>
+                  <p className="text-sm text-gray-500 mt-1">Upload a clear selfie so our AI can find your photos in the event gallery.</p>
+                </div>
 
-              <button onClick={() => setStep('otp')} className="w-full py-3 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium transition-all">
-                Back
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-4 border-2 border-dashed border-gray-300 rounded-2xl p-6 text-center cursor-pointer hover:border-[#2563eb] hover:bg-[#2563eb]/5 transition-all"
+                >
+                  {previewUrl ? (
+                    <img src={previewUrl} alt="Selfie Preview" className="w-32 h-32 object-cover rounded-full mx-auto shadow-md" />
+                  ) : (
+                    <div className="py-6">
+                      <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-700">Tap to take selfie or upload</p>
+                    </div>
+                  )}
+                  {/* Note: capture="user" opens front camera directly on mobile */}
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleSelfieSelect} />
+                </div>
+
+                <button 
+                  onClick={handleSelfieSubmit} 
+                  disabled={!selfieFile || loggingIn}
+                  className="w-full py-4 bg-[#2563eb] text-white rounded-xl font-bold shadow-lg hover:bg-[#1d4ed8] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loggingIn ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                  {loggingIn ? 'Analyzing Face...' : 'Find My Photos'}
+                </button>
+              </div>
+            )
+          ) : (
+            /* PHOTOGRAPHER LOGIN FLOW (Kept identical to previous) */
+            <form onSubmit={handlePhotographerLogin} className="space-y-6 animate-in fade-in">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Admin Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                  <input type="email" required placeholder="admin@eventsnap.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none text-gray-900 bg-white" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
+                  <input type="password" required placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none text-gray-900 bg-white" />
+                </div>
+              </div>
+              <button type="submit" disabled={loggingIn} className="w-full py-4 bg-[#2563eb] text-white rounded-xl font-bold shadow-lg hover:bg-[#1d4ed8] transition-all flex items-center justify-center gap-2">
+                {loggingIn ? <Loader2 className="animate-spin w-5 h-5" /> : <UserSquare2 className="w-5 h-5" />}
+                {loggingIn ? 'Authenticating...' : 'Login as Photographer'}
               </button>
-            </div>
+            </form>
           )}
         </div>
-
-        <p className="text-center text-sm text-gray-500 mt-6 font-medium">
-          By continuing, you agree to our Terms & Privacy Policy
-        </p>
       </div>
     </div>
   );

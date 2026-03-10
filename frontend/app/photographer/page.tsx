@@ -1,7 +1,8 @@
 "use client";
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, Upload, Users, Calendar, LogOut, Plus, Check } from 'lucide-react';
+import { Camera, Upload, Users, Calendar, LogOut, Plus, Check, Loader2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 // Mock data for clients
 const mockClients = [
@@ -11,26 +12,49 @@ const mockClients = [
 ];
 
 export default function PhotographerDashboard() {
+  const router = useRouter();
+  const { role, loading: authLoading, phone, logout } = useAuth();
+  
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  
+  // 🌟 NAYA: Database se events yahan aayenge
+  const [liveEvents, setLiveEvents] = useState<any[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const router = useRouter();
-  
-  // Mock Auth (Replace later with actual Next.js context/auth)
-  const user = { name: "Admin Photographer" };
+
+  // 1. Role Check & Fetch Events from Backend
+  useEffect(() => {
+    if (!authLoading && (!phone || role !== 'photographer')) {
+      router.push('/');
+      return;
+    }
+
+    // Backend se events load karo
+    if (role === 'photographer') {
+      fetch("http://localhost:8000/api/photographer/events")
+        .then(res => res.json())
+        .then(data => {
+          if (data.events) setLiveEvents(data.events);
+        })
+        .catch(err => console.error("Error fetching events:", err));
+    }
+  }, [authLoading, role, phone, router]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach((file) => {
+      const newFiles = Array.from(files);
+      setSelectedFiles((prev) => [...prev, ...newFiles]);
+      
+      newFiles.forEach((file) => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setUploadedPhotos((prev) => [...prev, reader.result as string]);
-        };
+        reader.onloadend = () => setPreviews((prev) => [...prev, reader.result as string]);
         reader.readAsDataURL(file);
       });
     }
@@ -38,42 +62,52 @@ export default function PhotographerDashboard() {
 
   const toggleClient = (clientId: string) => {
     setSelectedClients((prev) =>
-      prev.includes(clientId)
-        ? prev.filter((id) => id !== clientId)
-        : [...prev, clientId]
+      prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId]
     );
   };
 
- // Replace your current create event function with this:
-const handleCreateEvent = async (eventName: string) => {
-  try {
-    const response = await fetch("http://localhost:8000/api/events/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      // Make sure the key matches the FastAPI Pydantic model exactly
-      body: JSON.stringify({ event_name: eventName }), 
-    });
+  const handleCreateAndUpload = async () => {
+    setUploading(true);
+    try {
+      // Step A: Upload photos to backend
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("event_name", eventName); // <-- Yeh line hona zaroori hai
 
-    const data = await response.json();
+        await fetch("http://localhost:8000/api/photographer/upload", {
+          method: "POST",
+          body: formData,
+        });
+      }
 
-    if (data.status === "success") {
-      alert(`🎉 Success! ${data.message}`);
-      // Add logic here to close your modal and refresh the event list
-    } else {
-      alert(`⚠️ Error: ${data.message}`);
+      // Step C: Refresh Events list dynamically
+      const res = await fetch("http://localhost:8000/api/photographer/events");
+      const data = await res.json();
+      if(data.events) setLiveEvents(data.events);
+
+      alert("🎉 Success! Event created and scanning started.");
+      setShowUploadForm(false);
+      setPreviews([]);
+      setSelectedFiles([]);
+      setEventName('');
+      setSelectedClients([]);
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("❌ Upload failed. Check if backend is running.");
+    } finally {
+      setUploading(false);
     }
-  } catch (error) {
-    console.error("Error connecting to backend:", error);
-    alert("Backend connection failed. Is Docker running?");
-  }
-};
+  };
 
   const handleLogout = () => {
-    // In a real app, clear tokens here
+    logout();
     router.push('/');
   };
+
+  if (authLoading || role !== 'photographer') {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-[#2563eb]" /></div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 font-['Inter',sans-serif]">
@@ -86,269 +120,107 @@ const handleCreateEvent = async (eventName: string) => {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-gray-900">EventSnap</h1>
-              <p className="text-sm text-gray-600">Photographer Dashboard</p>
+              <p className="text-sm text-gray-600">Photographer Portal</p>
             </div>
           </div>
-
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-600">Photographer</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <LogOut className="w-5 h-5 text-gray-600" />
+            <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600 transition-colors">
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
+        {/* Dynamic Stats */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#2563eb]/10 flex items-center justify-center">
-                <Camera className="w-6 h-6 text-[#2563eb]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">12</p>
-                <p className="text-sm text-gray-600">Total Events</p>
-              </div>
-            </div>
+             <p className="text-sm text-gray-500 mb-1">Total Events</p>
+             <p className="text-3xl font-bold text-gray-900">{liveEvents.length}</p>
           </div>
-
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">48</p>
-                <p className="text-sm text-gray-600">Active Clients</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                <Upload className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">2,456</p>
-                <p className="text-sm text-gray-600">Photos Uploaded</p>
-              </div>
-            </div>
+             <p className="text-sm text-gray-500 mb-1">Total Uploads</p>
+             <p className="text-3xl font-bold text-[#2563eb]">
+               {liveEvents.reduce((sum, event) => sum + event.photos, 0)}
+             </p>
           </div>
         </div>
 
-        {/* Upload New Event */}
         {!showUploadForm ? (
-          <button
-            onClick={() => setShowUploadForm(true)}
-            className="w-full py-6 rounded-2xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white font-medium shadow-lg hover:shadow-xl transition-all mb-8 flex items-center justify-center gap-3"
-          >
-            <Plus className="w-5 h-5" />
-            Create New Event
+          <button onClick={() => setShowUploadForm(true)} className="w-full py-6 rounded-2xl bg-[#2563eb] text-white font-bold shadow-lg hover:bg-[#1d4ed8] transition-all mb-8 flex items-center justify-center gap-3">
+            <Plus className="w-6 h-6" /> Start New Event Upload
           </button>
         ) : (
-          <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Event Photos</h2>
-
+          <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100 mb-8 animate-in fade-in slide-in-from-bottom-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Event Details & Upload</h2>
             <div className="space-y-6">
-              {/* Event Details */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Name
-                  </label>
-                  <input
-                    type="text"
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    placeholder="e.g., Summer Wedding 2026"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Date
-                  </label>
-                  <input
-                    type="date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent text-gray-900"
-                  />
-                </div>
+              <div className="grid md:grid-cols-2 gap-6">
+                <input type="text" placeholder="Event Name (e.g., Holi 2026)" value={eventName} onChange={(e) => setEventName(e.target.value)} className="w-full px-5 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none" />
+                <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-5 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2563eb] outline-none" />
               </div>
-
-              {/* Select Clients */}
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Share with Clients (They can invite their family & friends)
-                </label>
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <label className="block text-sm font-bold text-gray-700 mb-3">Select Clients</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {mockClients.map((client) => (
-                    <button
-                      key={client.id}
-                      onClick={() => toggleClient(client.id)}
-                      className={`
-                        p-4 rounded-xl border-2 transition-all text-left
-                        ${
-                          selectedClients.includes(client.id)
-                            ? 'border-[#2563eb] bg-[#2563eb]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }
-                      `}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">{client.name}</p>
-                          <p className="text-sm text-gray-600">{client.phone}</p>
-                        </div>
-                        {selectedClients.includes(client.id) && (
-                          <div className="w-6 h-6 rounded-full bg-[#2563eb] flex items-center justify-center">
-                            <Check className="w-4 h-4 text-white" />
-                          </div>
-                        )}
-                      </div>
+                    <button key={client.id} onClick={() => toggleClient(client.id)} className={`p-4 rounded-xl border-2 transition-all text-left flex justify-between items-center ${selectedClients.includes(client.id) ? 'border-[#2563eb] bg-[#2563eb]/5' : 'border-gray-100'}`}>
+                      <span>{client.name}</span>
+                      {selectedClients.includes(client.id) && <Check className="w-4 h-4 text-[#2563eb]" />}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Upload Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Upload Photos ({uploadedPhotos.length} selected)
-                </label>
-                
-                {uploadedPhotos.length === 0 ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center cursor-pointer hover:border-[#2563eb] hover:bg-[#2563eb]/5 transition-all"
-                  >
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium mb-2">
-                      Click to upload event photos
-                    </p>
-                    <p className="text-sm text-gray-500">Support multiple files, JPG, PNG</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3 mb-4">
-                      {uploadedPhotos.map((photo, index) => (
-                        <img
-                          key={index}
-                          src={photo}
-                          alt={`Upload ${index + 1}`}
-                          className="aspect-square object-cover rounded-lg"
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-sm text-[#2563eb] hover:underline font-medium"
-                    >
-                      Add more photos
-                    </button>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center cursor-pointer hover:border-[#2563eb] transition-colors">
+                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-600 font-medium">Click to select event photos</p>
+                <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-4 pt-4">
-                <button
-                  onClick={() => handleCreateEvent(eventName)}
-                  disabled={!eventName || !eventDate || selectedClients.length === 0 || uploadedPhotos.length === 0}
-                  className="flex-1 py-3 px-6 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create Event & Upload
+              {previews.length > 0 && (
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                  {previews.map((src, i) => <img key={i} src={src} className="aspect-square object-cover rounded-lg border border-gray-100" />)}
+                </div>
+              )}
+
+              <div className="flex gap-4">
+                <button onClick={handleCreateAndUpload} disabled={uploading || !eventName || selectedFiles.length === 0} className="flex-1 py-4 bg-[#2563eb] text-white rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+                  {uploading ? <Loader2 className="animate-spin" /> : <Check />}
+                  {uploading ? 'Uploading & Saving...' : 'Complete Event Creation'}
                 </button>
-                <button
-                  onClick={() => setShowUploadForm(false)}
-                  className="px-6 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium transition-all"
-                >
-                  Cancel
-                </button>
+                <button onClick={() => setShowUploadForm(false)} className="px-8 py-4 bg-gray-100 rounded-xl font-bold">Cancel</button>
               </div>
             </div>
           </div>
         )}
-
-        {/* Recent Events */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Events</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                name: 'Summer Wedding 2026',
-                date: '2026-06-15',
-                photos: 245,
-                clients: 3,
-                thumbnail: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400',
-              },
-              {
-                name: 'Corporate Annual Meet',
-                date: '2026-05-20',
-                photos: 180,
-                clients: 5,
-                thumbnail: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400',
-              },
-              {
-                name: 'Birthday Bash',
-                date: '2026-04-10',
-                photos: 156,
-                clients: 2,
-                thumbnail: 'https://images.unsplash.com/photo-1530103862676-de8892d658fc?w=400',
-              },
-            ].map((event, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg transition-all cursor-pointer"
-              >
-                <img
-                  src={event.thumbnail}
-                  alt={event.name}
-                  className="w-full h-48 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">{event.name}</h3>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{new Date(event.date).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Camera className="w-4 h-4" />
-                      <span>{event.photos}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      <span>{event.clients}</span>
-                    </div>
+        
+        {/* Dynamic Database Feeds */}
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Live Event Feeds</h2>
+        {liveEvents.length === 0 ? (
+          <p className="text-gray-500">No events created yet. Start uploading!</p>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-6">
+             {liveEvents.map((event, idx) => (
+               <div 
+                 key={idx} 
+                 // NAYA: Click handler add kiya hai
+                 onClick={() => router.push(`/photographer/event/${encodeURIComponent(event.name)}`)}
+                 className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-xl hover:border-[#2563eb] transition-all duration-300 animate-in fade-in zoom-in-95 group"
+               >
+                  <div className="aspect-video bg-gray-200 rounded-xl mb-3 overflow-hidden">
+                    <img 
+                      src={event.thumbnail} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                      alt={event.name} 
+                    />
                   </div>
-                </div>
-              </div>
-            ))}
+                  <h3 className="font-bold text-gray-900 group-hover:text-[#2563eb] transition-colors">{event.name}</h3>
+                  <p className="text-xs text-gray-500">{event.photos} Photos • {event.clients} Clients notified</p>
+               </div>
+             ))}
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
 }
-
