@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ SEPSA: Smart Event Photo Sharing App
 
-## Getting Started
+![Development Status](https://img.shields.io/badge/Status-In%20Development-orange)
+![Version](https://img.shields.io/badge/Version-0.1.0--Alpha-blue)
 
-First, run the development server:
+> **⚠️ NOTE:** This project is currently in the **Active Development Phase**. APIs and features are subject to change. Not yet intended for production use [cite: 2026-03-01].
+
+**SEPSA** (Smart Event Photo Sharing App) is an AI-driven image distribution system designed to automate photo sharing using Face Recognition [cite: 2026-03-01].
+
+---
+
+## 🏗️ Project Status: Alpha
+Currently, we are focusing on the **Core Infrastructure** and **Data Validation Pipeline** [cite: 2026-03-01].
+- [x] Backend & Admin Dashboard Architecture [cite: 2026-03-01].
+- [x] Automated QA & Metadata Validation [cite: 2026-03-01].
+- [ ] **NEXT UP:** DeepFace Biometric Encoding [cite: 2026-03-01].
+
+---
+
+## 🚀 Current Architecture
+The project follows a microservices-oriented approach via **Docker Compose** [cite: 2026-03-01].
+
+* **Backend:** FastAPI (Python) with Uvicorn [cite: 2026-03-01].
+* **Admin Dashboard:** Streamlit interface for real-time monitoring [cite: 2026-03-01].
+* **Frontend:** Next.js with Tailwind CSS [cite: 2026-03-01].
+* **Storage:** Local volume mapping for event-based organization [cite: 2026-03-01].
+
+---
+
+## 🛠️ Implemented Features
+
+### 1. Smart Login & Auth
+- **OTP Flow:** Simulated authentication for secure access [cite: 2026-03-01].
+- **5-Day Photo Rule:** Ensures selfies are captured within 5 days using EXIF analysis [cite: 2026-03-01].
+- **Portrait Validation:** Automatic aspect ratio checks [cite: 2026-03-01].
+
+### 2. Event Engine
+- **Dynamic Creation:** Automatic folder and registry generation [cite: 2026-03-01].
+- **Logging:** Persistent CSV-based audit trails [cite: 2026-03-01].
+
+---
+
+## 📦 Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+# Clone the repository
+git clone [https://github.com/dhruwizmyname/sepsa.git](https://github.com/dhruwizmyname/sepsa.git)
+cd sepsa
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Deploy using Docker
+docker-compose up -d --build  

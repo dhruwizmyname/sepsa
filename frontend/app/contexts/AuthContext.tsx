@@ -1,43 +1,61 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+"use client";
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-interface User {
-  id: string;
-  role: 'photographer' | 'client';
-  name: string;
-  phone?: string;
-  selfieUrl?: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  login: (user: User) => void;
+type AuthContextType = {
+  phone: string | null;
+  role: 'user' | 'photographer' | null;
+  loading: boolean; // Ye loop rokne ke liye zaroori hai
+  login: (phone: string, role: 'user' | 'photographer') => void;
   logout: () => void;
-}
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [phone, setPhone] = useState<string | null>(null);
+  const [role, setRole] = useState<'user' | 'photographer' | null>(null);
+  const [loading, setLoading] = useState(true); // Default loading true rahega
 
-  const login = (userData: User) => {
-    setUser(userData);
+  useEffect(() => {
+    // Component mount hote hi localStorage check karo
+    const savedPhone = localStorage.getItem("userPhone");
+    const savedRole = localStorage.getItem("userRole") as 'user' | 'photographer' | null;
+
+    if (savedPhone && savedRole) {
+      setPhone(savedPhone);
+      setRole(savedRole);
+    }
+    
+    // Memory read hone ke baad loading false kar do
+    setLoading(false);
+  }, []);
+
+  const login = (userPhone: string, userRole: 'user' | 'photographer') => {
+    setPhone(userPhone);
+    setRole(userRole);
+    localStorage.setItem("userPhone", userPhone);
+    localStorage.setItem("userRole", userRole);
   };
 
   const logout = () => {
-    setUser(null);
+    setPhone(null);
+    setRole(null);
+    localStorage.removeItem("userPhone");
+    localStorage.removeItem("userRole");
+    // clear() ki jagah removeItem use karna safe hai taaki dusra data na ude
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ phone, role, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
-}
+};

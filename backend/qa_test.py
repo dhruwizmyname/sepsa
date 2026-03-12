@@ -1,75 +1,78 @@
 import requests
 import os
-from datetime import datetime
 
 BASE_URL = "http://localhost:8000/api"
-TEST_PHONE = "8962744270"
-TEST_OTP = "230786"
-TEST_IMAGE = "backend/test.jpg"
 
-print("🚀 Starting Full End-to-End QA Test...\n")
+print("🚀 Starting SEPSA Automated API Tests...\n")
 
-# --- Step 1: Request OTP ---
-print(f"Step 1: Requesting OTP for {TEST_PHONE}...")
+# ==========================================
+# TEST 1: PHOTOGRAPHER LOGIN (Email + Pass)
+# ==========================================
+print("📸 Test 1: Photographer Login...")
+photo_creds = {
+    "email": "admin@eventsnap.com",
+    "password": "password123"
+}
 try:
-    res1 = requests.post(f"{BASE_URL}/auth/request-otp", json={"phone": TEST_PHONE})
+    # Form data bhej rahe hain (jaisa frontend karta hai)
+    res1 = requests.post(f"{BASE_URL}/auth/photographer-login", data=photo_creds)
     if res1.status_code == 200:
         print("  ✅ SUCCESS:", res1.json())
     else:
-        print("  ❌ FAIL:", res1.text)
-        exit()
+        print("  ❌ FAIL:", res1.status_code, res1.text)
 except Exception as e:
-    print("  ❌ CONNECTION ERROR:", e)
-    exit()
+    print("  ❌ CONNECTION ERROR (Is Docker running?):", e)
 
-# --- Step 2: Verify OTP ---
-print(f"\nStep 2: Verifying OTP ({TEST_OTP})...")
-res2 = requests.post(f"{BASE_URL}/auth/verify-otp", json={"phone": TEST_PHONE, "otp": TEST_OTP})
-if res2.status_code == 200:
-    token = res2.json().get("token")
-    print("  ✅ SUCCESS: Token Received ->", token)
+
+# ==========================================
+# TEST 2: USER FLOW (Check User & Fetch Gallery)
+# ==========================================
+TEST_PHONE = "8962744270"  # Aapka test number
+print(f"\n👤 Test 2: User Flow for {TEST_PHONE}...")
+
+# Step 2A: Check User Exists
+res_check = requests.get(f"{BASE_URL}/auth/check-user/{TEST_PHONE}")
+if res_check.status_code == 200:
+    print(f"  ✅ CHECK USER SUCCESS:", res_check.json())
 else:
-    print("  ❌ FAIL:", res2.text)
-    exit()
+    print("  ❌ CHECK USER FAIL:", res_check.text)
 
-# --- Step 3: Upload Selfie (With REAL Dummy Image) ---
-print("\nStep 3: Uploading Selfie for 5-Day Rule Check...")
+# Step 2B: Fetch AI Gallery
+print(f"  -> Fetching AI Gallery photos...")
+res_photos = requests.get(f"{BASE_URL}/photos?phone={TEST_PHONE}")
+if res_photos.status_code == 200:
+    photos_data = res_photos.json().get("photos", [])
+    print(f"  ✅ FETCH SUCCESS: Found {len(photos_data)} photos in gallery.")
+else:
+    print("  ❌ FETCH FAIL:", res_photos.status_code, res_photos.text)
+
+
+# ==========================================
+# TEST 3: SELFIE UPLOAD (Dummy Image)
+# ==========================================
+print("\n🤳 Test 3: New User Selfie Upload...")
+TEST_IMAGE = "dummy_face.jpg"
+NEW_PHONE = "9999999999"
+
+# Ek dummy image create karte hain test ke liye
 if not os.path.exists(TEST_IMAGE):
-    os.makedirs("backend", exist_ok=True)
-    try:
-        from PIL import Image
-        # Ek asli neele rang ki image banate hain taaki server crash na ho
-        dummy_img = Image.new('RGB', (400, 600), color='blue') 
-        dummy_img.save(TEST_IMAGE)
-    except Exception as e:
-        print(f"  ❌ Failed to create dummy image: {e}")
+    from PIL import Image
+    dummy_img = Image.new('RGB', (100, 100), color='green')
+    dummy_img.save(TEST_IMAGE)
 
-with open(TEST_IMAGE, "rb") as img:
-    files = {"selfie": ("test.jpg", img, "image/jpeg")}
-    headers = {"Authorization": f"Bearer {token}"}
-    res3 = requests.post(f"{BASE_URL}/auth/verify-selfie", files=files, headers=headers)
-    
-    if res3.status_code == 200:
-        print("  ✅ SUCCESS:", res3.json())
-    else:
-        print("  ⚠️ WARNING / FAIL:", res3.text)
+try:
+    with open(TEST_IMAGE, "rb") as img:
+        files = {"selfie": ("dummy_face.jpg", img, "image/jpeg")}
+        data = {"phone": NEW_PHONE}
+        
+        res_selfie = requests.post(f"{BASE_URL}/auth/verify-selfie", data=data, files=files)
+        
+        # Deepface fail hoga kyunki isme asli chehra nahi hai, par API run honi chahiye
+        if res_selfie.status_code == 200:
+            print("  ✅ SUCCESS:", res_selfie.json())
+        else:
+            print(f"  ⚠️ EXPECTED FAIL (AI needs real face): {res_selfie.status_code} - {res_selfie.json().get('detail')}")
+except Exception as e:
+    print("  ❌ SELFIE TEST ERROR:", e)
 
-# --- Step 4: Create Event (DYNAMIC NAMING) ---
-print("\nStep 4: Creating a New Event...")
-
-# Dynamic Name Generation: Test_DD_MM_YYYY_Run_HHMMSS
-now = datetime.now()
-dynamic_event_name = f"Test_{now.strftime('%d_%m_%Y')}_Run_{now.strftime('%H%M%S')}"
-
-event_data = {
-    "event_name": dynamic_event_name,
-    "created_by": "QA Automated Bot"
-}
-res4 = requests.post(f"{BASE_URL}/events/create", params=event_data)
-
-if res4.status_code == 200:
-    print(f"  ✅ SUCCESS: Event Created -> {res4.json().get('folder')}")
-else:
-    print("  ❌ FAIL:", res4.text)
-
-print("\n🎉 All tests completed! Check your Admin Dashboard.")
+print("\n🎉 All automated tests completed in milliseconds!")

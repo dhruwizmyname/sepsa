@@ -1,354 +1,243 @@
 "use client";
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, Upload, Users, Calendar, LogOut, Plus, Check } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Loader2, ChevronLeft, RefreshCw } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import UserNavbar from '../../components/UserNavbar';
 
-// Mock data for clients
-const mockClients = [
-  { id: '1', name: 'John Doe', phone: '+1 555 0101' },
-  { id: '2', name: 'Jane Smith', phone: '+1 555 0102' },
-  { id: '3', name: 'Mike Johnson', phone: '+1 555 0103' },
-];
+interface MatchedPhoto {
+  url: string;
+  thumbnail: string;
+  filename: string;
+}
 
-export default function PhotographerDashboard() {
-  const [eventName, setEventName] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
-  const [showUploadForm, setShowUploadForm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
+interface EventPhoto {
+  full_url: string;
+  thumbnail: string;
+  filename: string;
+}
+
+interface EventInfo {
+  name: string;
+  date: string;
+  photos: number;
+  thumbnail: string;
+}
+
+export default function UserDashboard() {
   const router = useRouter();
-  
-  // Mock Auth (Replace later with actual Next.js context/auth)
-  const user = { name: "Admin Photographer" };
+  const { phone, role, loading: authLoading } = useAuth();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      Array.from(files).forEach((file) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setUploadedPhotos((prev) => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
-      });
+  const [events, setEvents] = useState<EventInfo[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [matchedPhotos, setMatchedPhotos] = useState<MatchedPhoto[]>([]);
+  const [allPhotos, setAllPhotos] = useState<EventPhoto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [rescanning, setRescanning] = useState(false);
+
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && (!phone || role !== 'user')) {
+      router.push('/login');
     }
-  };
+  }, [phone, role, authLoading, router]);
 
-  const toggleClient = (clientId: string) => {
-    setSelectedClients((prev) =>
-      prev.includes(clientId)
-        ? prev.filter((id) => id !== clientId)
-        : [...prev, clientId]
+  // Fetch events list
+  useEffect(() => {
+    if (!phone) return;
+    const fetchEvents = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('http://localhost:8000/api/photographer/events');
+        const data = await res.json();
+        setEvents(data.events || []);
+      } catch (error) {
+        console.error("Error loading events:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
+  }, [phone]);
+
+  // Fetch photos when an event is selected
+  useEffect(() => {
+    if (!selectedEvent || !phone) return;
+    const fetchPhotos = async () => {
+      setLoading(true);
+      try {
+        // 1. Fetch AI Matched Photos for this user
+        const matchedRes = await fetch(`http://localhost:8000/api/photos?phone=${encodeURIComponent(phone)}`);
+        const matchedData = await matchedRes.json();
+        setMatchedPhotos(matchedData.photos || []);
+
+        // 2. Fetch All Event Photos
+        const allRes = await fetch(`http://localhost:8000/api/photographer/photos?event_name=${encodeURIComponent(selectedEvent)}`);
+        const allData = await allRes.json();
+        setAllPhotos(allData.photos || []);
+      } catch (error) {
+        console.error("Error loading gallery:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPhotos();
+  }, [selectedEvent, phone]);
+
+  if (authLoading || (!phone && !authLoading)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+      </div>
     );
-  };
-
- // Replace your current create event function with this:
-const handleCreateEvent = async (eventName) => {
-  try {
-    const response = await fetch("http://localhost:8000/api/events/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      // Make sure the key matches the FastAPI Pydantic model exactly
-      body: JSON.stringify({ event_name: eventName }), 
-    });
-
-    const data = await response.json();
-
-    if (data.status === "success") {
-      alert(`🎉 Success! ${data.message}`);
-      // Add logic here to close your modal and refresh the event list
-    } else {
-      alert(`⚠️ Error: ${data.message}`);
-    }
-  } catch (error) {
-    console.error("Error connecting to backend:", error);
-    alert("Backend connection failed. Is Docker running?");
   }
-};
 
-  const handleLogout = () => {
-    // In a real app, clear tokens here
-    router.push('/');
-  };
+  if (loading && !selectedEvent) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+        <p className="text-gray-500 animate-pulse">Loading events...</p>
+      </div>
+    );
+  }
 
+  // Event list view
+  if (!selectedEvent) {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-20">
+        <UserNavbar />
+        <div className="max-w-7xl mx-auto px-6 mt-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">Select an Event</h2>
+          {events.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {events.map((event) => (
+                <button
+                  key={event.name}
+                  onClick={() => { setSelectedEvent(event.name); setActiveTab('all'); }}
+                  className="bg-white rounded-2xl shadow-sm border hover:shadow-md transition-shadow overflow-hidden text-left"
+                >
+                  <img src={event.thumbnail} alt={event.name} className="w-full h-40 object-cover" />
+                  <div className="p-4">
+                    <h3 className="font-bold text-gray-900 text-lg">{event.name}</h3>
+                    <p className="text-gray-500 text-sm mt-1">
+                      {event.date && event.date}
+                      {event.photos > 0 && ` · ${event.photos} photos`}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed">
+              <p className="text-gray-400">No events available yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Event photos view
   return (
-    <div className="min-h-screen bg-gray-50 font-['Inter',sans-serif]">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] flex items-center justify-center shadow-md">
-              <Camera className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">EventSnap</h1>
-              <p className="text-sm text-gray-600">Photographer Dashboard</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-              <p className="text-xs text-gray-600">Photographer</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <UserNavbar />
+      {/* Header & Tabs */}
+      <div className="bg-white border-b sticky top-0 z-10" style={{ top: 0 }}>
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <button
+            onClick={() => { setSelectedEvent(null); setMatchedPhotos([]); setAllPhotos([]); }}
+            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm mb-4 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Events
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Event: {selectedEvent}</h1>
+          
+          <div className="flex gap-4 border-b">
+            <button 
+              onClick={() => setActiveTab('matched')}
+              className={`pb-3 px-4 font-semibold transition-all flex items-center gap-2 ${
+                activeTab === 'matched' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'
+              }`}
             >
-              <LogOut className="w-5 h-5 text-gray-600" />
+              <Sparkles className="w-4 h-4" />
+              Your Photos ({matchedPhotos.length})
+            </button>
+            <button 
+              onClick={() => setActiveTab('all')}
+              className={`pb-3 px-4 font-semibold transition-all flex items-center gap-2 ${
+                activeTab === 'all' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              All Photos ({allPhotos.length})
             </button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#2563eb]/10 flex items-center justify-center">
-                <Camera className="w-6 h-6 text-[#2563eb]" />
+      {/* Gallery Content */}
+      <div className="max-w-7xl mx-auto px-6 mt-8">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+            <p className="text-gray-500 animate-pulse">AI is organizing your memories...</p>
+          </div>
+        ) : activeTab === 'matched' ? (
+          <div>
+            {matchedPhotos.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {matchedPhotos.map((photo, idx) => (
+                  <img key={idx} src={photo.url} alt={photo.filename} className="rounded-xl shadow-sm hover:scale-[1.02] transition-transform cursor-pointer" />
+                ))}
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">12</p>
-                <p className="text-sm text-gray-600">Total Events</p>
+            ) : (
+              <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed">
+                <p className="text-gray-400">AI couldn&apos;t find your face yet. Check back in a few minutes or view All Photos.</p>
               </div>
+            )}
+            {/* Rescan Button */}
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={async () => {
+                  if (!phone) return;
+                  setRescanning(true);
+                  try {
+                    await fetch(`http://localhost:8000/api/user/rescan/${encodeURIComponent(phone)}`, { method: 'POST' });
+                    // Wait a bit for background rescan, then refetch
+                    setTimeout(async () => {
+                      const matchedRes = await fetch(`http://localhost:8000/api/photos?phone=${encodeURIComponent(phone)}`);
+                      const matchedData = await matchedRes.json();
+                      setMatchedPhotos(matchedData.photos || []);
+                      setRescanning(false);
+                    }, 5000);
+                  } catch { setRescanning(false); }
+                }}
+                disabled={rescanning}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                <RefreshCw className={`w-4 h-4 ${rescanning ? 'animate-spin' : ''}`} />
+                {rescanning ? 'Rescanning all photos...' : 'Rescan My Photos (AI)'}
+              </button>
             </div>
           </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">48</p>
-                <p className="text-sm text-gray-600">Active Clients</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                <Upload className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">2,456</p>
-                <p className="text-sm text-gray-600">Photos Uploaded</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Upload New Event */}
-        {!showUploadForm ? (
-          <button
-            onClick={() => setShowUploadForm(true)}
-            className="w-full py-6 rounded-2xl bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] text-white font-medium shadow-lg hover:shadow-xl transition-all mb-8 flex items-center justify-center gap-3"
-          >
-            <Plus className="w-5 h-5" />
-            Create New Event
-          </button>
         ) : (
-          <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Event Photos</h2>
-
-            <div className="space-y-6">
-              {/* Event Details */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Name
-                  </label>
-                  <input
-                    type="text"
-                    value={eventName}
-                    onChange={(e) => setEventName(e.target.value)}
-                    placeholder="e.g., Summer Wedding 2026"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Event Date
-                  </label>
-                  <input
-                    type="date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:border-transparent text-gray-900"
-                  />
-                </div>
+          <div>
+            {allPhotos.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {allPhotos.map((photo, idx) => (
+                  <img key={idx} src={photo.full_url} alt={photo.filename} className="rounded-xl shadow-sm hover:scale-[1.02] transition-transform cursor-pointer" />
+                ))}
               </div>
-
-              {/* Select Clients */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Share with Clients (They can invite their family & friends)
-                </label>
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {mockClients.map((client) => (
-                    <button
-                      key={client.id}
-                      onClick={() => toggleClient(client.id)}
-                      className={`
-                        p-4 rounded-xl border-2 transition-all text-left
-                        ${
-                          selectedClients.includes(client.id)
-                            ? 'border-[#2563eb] bg-[#2563eb]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }
-                      `}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900">{client.name}</p>
-                          <p className="text-sm text-gray-600">{client.phone}</p>
-                        </div>
-                        {selectedClients.includes(client.id) && (
-                          <div className="w-6 h-6 rounded-full bg-[#2563eb] flex items-center justify-center">
-                            <Check className="w-4 h-4 text-white" />
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+            ) : (
+              <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed">
+                <p className="text-gray-400">No photos uploaded for this event yet.</p>
               </div>
-
-              {/* Upload Photos */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Upload Photos ({uploadedPhotos.length} selected)
-                </label>
-                
-                {uploadedPhotos.length === 0 ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center cursor-pointer hover:border-[#2563eb] hover:bg-[#2563eb]/5 transition-all"
-                  >
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium mb-2">
-                      Click to upload event photos
-                    </p>
-                    <p className="text-sm text-gray-500">Support multiple files, JPG, PNG</p>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3 mb-4">
-                      {uploadedPhotos.map((photo, index) => (
-                        <img
-                          key={index}
-                          src={photo}
-                          alt={`Upload ${index + 1}`}
-                          className="aspect-square object-cover rounded-lg"
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-sm text-[#2563eb] hover:underline font-medium"
-                    >
-                      Add more photos
-                    </button>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-4 pt-4">
-                <button
-                  onClick={handleCreateEvent}
-                  disabled={!eventName || !eventDate || selectedClients.length === 0 || uploadedPhotos.length === 0}
-                  className="flex-1 py-3 px-6 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create Event & Upload
-                </button>
-                <button
-                  onClick={() => setShowUploadForm(false)}
-                  className="px-6 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
-
-        {/* Recent Events */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Events</h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                name: 'Summer Wedding 2026',
-                date: '2026-06-15',
-                photos: 245,
-                clients: 3,
-                thumbnail: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=400',
-              },
-              {
-                name: 'Corporate Annual Meet',
-                date: '2026-05-20',
-                photos: 180,
-                clients: 5,
-                thumbnail: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=400',
-              },
-              {
-                name: 'Birthday Bash',
-                date: '2026-04-10',
-                photos: 156,
-                clients: 2,
-                thumbnail: 'https://images.unsplash.com/photo-1530103862676-de8892d658fc?w=400',
-              },
-            ].map((event, index) => (
-              <div
-                key={index}
-                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-lg transition-all cursor-pointer"
-              >
-                <img
-                  src={event.thumbnail}
-                  alt={event.name}
-                  className="w-full h-48 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">{event.name}</h3>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{new Date(event.date).toLocaleDateString()}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Camera className="w-4 h-4" />
-                      <span>{event.photos}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      <span>{event.clients}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }
-
