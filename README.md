@@ -7,25 +7,30 @@ EventSnap is an intelligent photo management platform designed to streamline the
 
 ---
 
-## 🚀 Key Features (Current & Incoming)
+## 🚀 Key Features
 
-* **Neural Search Engine**: Implementing high-performance facial recognition (DeepFace/OpenCV) to detect and index faces within event uploads.
-* **Intelligent Authentication**: A secure 3-step login flow featuring Mobile OTP and Selfie-based identity verification for automated photo matching.
-* **Photographer Dashboard**: A comprehensive management interface for professionals to create events, manage client lists, and monitor upload statistics.
-* **Automated Privacy**: Sophisticated filtering logic that provides clients with personalized galleries containing only their identified images.
+* **Neural Search Engine**: Implements high-performance facial recognition using `DeepFace` (Facenet512 + RetinaFace) to detect, extract embeddings, and index faces within bulk event uploads.
+* **Intelligent Authentication**: A secure, passwordless 3-step login flow featuring Mobile OTP and instant Selfie-based identity verification.
+* **Photographer Dashboard & Bulk Upload**: A comprehensive management interface for professionals to create events, drag-and-drop entire folders, and monitor asynchronous upload pipelines.
+* **Cloud-Optimized Delivery**: Original high-resolution photos are securely offloaded to Cloudinary CDN, ensuring lightning-fast delivery while minimizing local server storage.
+* **Live Admin Monitoring**: Real-time admin dashboard built on Streamlit to monitor user registries, authentication logs, and photo matching statistics.
+* **Non-Blocking Architecture**: Heavy AI scanning and cloud uploading tasks are handled via robust background processing to keep the UI highly responsive.
 
 ## 🛠 Tech Stack
 
-* **Frontend**: Next.js 16 (Turbopack), Tailwind CSS, Lucide Icons.
-* **Backend**: Python (FastAPI), Uvicorn.
-* **Containerization**: Docker & Docker Compose for seamless environment orchestration.
-* **DevOps**: Automated PowerShell and Bash setup scripts for rapid deployment.
+* **Frontend**: Next.js 16 (Turbopack), Tailwind CSS v4, Radix UI, Lucide Icons.
+* **Backend**: Python 3.10+, FastAPI, Uvicorn.
+* **AI & Vision**: TensorFlow (CPU Optimized), DeepFace, OpenCV, Pillow.
+* **Admin Interface**: Streamlit, Pandas.
+* **Storage & DB**: Cloudinary API, Local JSON/CSV lightweight data mapping.
+* **Containerization & DevOps**: Docker, Docker Compose, automated PowerShell/Bash setup scripts for rapid deployment.
 
 ## 📦 Getting Started
 
 ### Prerequisites
-* Docker & Docker Compose installed.
+* Docker & Docker Desktop installed.
 * Git installed for version control.
+* Cloudinary API Credentials.
 
 ### Installation
 1.  **Clone the Repository**:
@@ -33,22 +38,31 @@ EventSnap is an intelligent photo management platform designed to streamline the
     git clone [https://github.com/dhruwizmyname/sepsa.git](https://github.com/dhruwizmyname/sepsa.git)
     cd sepsa
     ```
-2.  **Initialize the Environment**:
+2.  **Environment Setup**:
+    Create a `.env` file in the `backend/` directory with your Cloudinary credentials:
+    ```env
+    CLOUDINARY_CLOUD_NAME=your_cloud_name
+    CLOUDINARY_API_KEY=your_api_key
+    CLOUDINARY_API_SECRET=your_api_secret
+    ```
+3.  **Initialize the Environment**:
     Run the custom automation script to build containers and sync UI dependencies:
     ```powershell
     .\setup.ps1
     ```
+    *(Alternatively, you can run `docker-compose up --build`)*
 
-## 🐳 Architecture
+## 🐳 Architecture & Services
 
-
-* **Frontend Service**: Accessible at `http://localhost:3000`
-* **Backend Service**: Accessible at `http://localhost:8000`
+Once deployed, the isolated containers are accessible at:
+* **Frontend Service (User/Photographer)**: `http://localhost:3000`
+* **Backend API & Swagger Docs**: `http://localhost:8000/docs`
+* **Admin Panel Service**: `http://localhost:8501`
 
 ---
 
 ## 🎓 Academic Context
-This project is developed as part of professional growth during the **Executive M.Tech in Data Science and Data Analytics at IIT Bhilai**. It demonstrates the practical application of Big Data technologies and Neural Networks in a real-world software product.
+This project is developed as part of professional growth during the **Executive M.Tech in Data Science and Data Analytics at IIT Bhilai**. It demonstrates the practical application of Big Data technologies, Containerization, and Neural Networks in a real-world software product.
 
 ## 👤 Author
 **Dhruw** *IT Analyst & M.Tech Data Science Candidate, IIT Bhilai*
