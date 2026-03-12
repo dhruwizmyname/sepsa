@@ -5,9 +5,11 @@ pydantic
 python-multipart==0.0.6
 
 # --- AI & DeepFace (Naya Add kiya gaya) ---
-deepface==0.0.92
-tf-keras==2.15.0
 tensorflow-cpu==2.15.0
+deepface==0.0.86
+tf-keras==2.15.0
+retina-face>=0.0.13
+
 
 # --- Image Processing ---
 opencv-python-headless==4.9.0.80
@@ -17,3 +19,12 @@ numpy==1.26.4
 # --- Admin UI ---
 streamlit==1.31.0
 pandas==2.2.0
+
+# --- Cloud Storage ---
+cloudinary==1.40.0
+
+# Google API Client Libraries
+google-api-python-client==2.118.0
+google-auth==2.28.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0

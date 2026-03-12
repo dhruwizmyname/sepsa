@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, Upload, Users, Calendar, LogOut, Plus, Check, Loader2 } from 'lucide-react';
+import { Camera, Upload, Users, Calendar, LogOut, Plus, Check, Loader2, Trash2, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 // Mock data for clients
@@ -23,10 +23,10 @@ export default function PhotographerDashboard() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [uploading, setUploading] = useState(false);
   
-  // 🌟 NAYA: Database se events yahan aayenge
   const [liveEvents, setLiveEvents] = useState<any[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Role Check & Fetch Events from Backend
   useEffect(() => {
@@ -35,7 +35,6 @@ export default function PhotographerDashboard() {
       return;
     }
 
-    // Backend se events load karo
     if (role === 'photographer') {
       fetch("http://localhost:8000/api/photographer/events")
         .then(res => res.json())
@@ -46,13 +45,17 @@ export default function PhotographerDashboard() {
     }
   }, [authLoading, role, phone, router]);
 
+  // 🌟 NAYA LOGIC: Folder se sirf images filter karna aur RAM bachana
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newFiles = Array.from(files);
+      // Sirf image files ko filter karo (folders mein kachra bhi hota hai)
+      const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
       setSelectedFiles((prev) => [...prev, ...newFiles]);
       
-      newFiles.forEach((file) => {
+      // Browser hang na ho, isliye preview sirf shuru ki 10 photos ka dikhayenge
+      const previewFiles = newFiles.slice(0, 10); 
+      previewFiles.forEach((file) => {
         const reader = new FileReader();
         reader.onloadend = () => setPreviews((prev) => [...prev, reader.result as string]);
         reader.readAsDataURL(file);
@@ -69,24 +72,36 @@ export default function PhotographerDashboard() {
   const handleCreateAndUpload = async () => {
     setUploading(true);
     try {
-      // Step A: Upload photos to backend
-      for (const file of selectedFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("event_name", eventName); // <-- Yeh line hona zaroori hai
+      // Step A: Create the event record in backend
+      await fetch("http://localhost:8000/api/events/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: eventName,
+          date: eventDate || new Date().toISOString().split("T")[0],
+          clients: selectedClients.length,
+          photos: selectedFiles.length,
+        }),
+      });
 
-        await fetch("http://localhost:8000/api/photographer/upload", {
-          method: "POST",
-          body: formData,
-        });
-      }
+      // 🌟 NAYA LOGIC: Bulk Upload (Ek parcel mein saari photos)
+      const formData = new FormData();
+      formData.append("event_name", eventName);
+      selectedFiles.forEach(file => {
+        formData.append("files", file); // Dhyan dein: 'files' key use hua hai (Backend ke hisaab se)
+      });
+
+      await fetch("http://localhost:8000/api/photographer/upload", {
+        method: "POST",
+        body: formData,
+      });
 
       // Step C: Refresh Events list dynamically
       const res = await fetch("http://localhost:8000/api/photographer/events");
       const data = await res.json();
       if(data.events) setLiveEvents(data.events);
 
-      alert("🎉 Success! Event created and scanning started.");
+      alert(`🎉 Success! ${selectedFiles.length} photos uploaded to Google Drive & Scanning started!`);
       setShowUploadForm(false);
       setPreviews([]);
       setSelectedFiles([]);
@@ -97,6 +112,20 @@ export default function PhotographerDashboard() {
       alert("❌ Upload failed. Check if backend is running.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeleteEvent = async (eventName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${eventName}" and all its photos? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/events/${encodeURIComponent(eventName)}`, { method: 'DELETE' });
+      if (res.ok) {
+        setLiveEvents(prev => prev.filter(ev => ev.name !== eventName));
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete event.');
     }
   };
 
@@ -123,7 +152,10 @@ export default function PhotographerDashboard() {
               <p className="text-sm text-gray-600">Photographer Portal</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.push('/photographer/monitor')} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors text-sm font-semibold flex items-center gap-2">
+              <Activity className="w-4 h-4" /> Pipeline Monitor
+            </button>
             <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-red-50 text-gray-600 hover:text-red-600 transition-colors">
               <LogOut className="w-5 h-5" />
             </button>
@@ -171,22 +203,55 @@ export default function PhotographerDashboard() {
                 </div>
               </div>
 
-              <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center cursor-pointer hover:border-[#2563eb] transition-colors">
+              <div className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center hover:border-[#2563eb] transition-colors">
                 <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-600 font-medium">Click to select event photos</p>
-                <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileSelect} />
+                <p className="text-gray-600 font-medium mb-4">Select photos or a folder to upload</p>
+                <div className="flex items-center justify-center gap-4">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="px-6 py-2.5 bg-[#2563eb] text-white rounded-lg font-bold hover:bg-[#1d4ed8] transition-colors">
+                    Select Photos
+                  </button>
+                  <button type="button" onClick={() => folderInputRef.current?.click()} className="px-6 py-2.5 bg-gray-700 text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">
+                    Select Folder
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-3">{selectedFiles.length > 0 ? `${selectedFiles.length} photos selected` : 'Supports multiple photos or entire folders'}</p>
+                
+                {/* Individual photo selection */}
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  multiple 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleFileSelect} 
+                />
+                {/* Folder selection */}
+                <input 
+                  ref={folderInputRef} 
+                  type="file" 
+                  multiple 
+                  accept="image/*" 
+                  // @ts-ignore
+                  webkitdirectory="true"
+                  directory="true"
+                  className="hidden" 
+                  onChange={handleFileSelect} 
+                />
               </div>
 
               {previews.length > 0 && (
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                  {previews.map((src, i) => <img key={i} src={src} className="aspect-square object-cover rounded-lg border border-gray-100" />)}
+                <div>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-2">
+                    {previews.map((src, i) => <img key={i} src={src} className="aspect-square object-cover rounded-lg border border-gray-100" />)}
+                  </div>
+                  {selectedFiles.length > 10 && <p className="text-xs text-center text-gray-500">Showing first 10 previews only (+{selectedFiles.length - 10} more)</p>}
                 </div>
               )}
 
               <div className="flex gap-4">
                 <button onClick={handleCreateAndUpload} disabled={uploading || !eventName || selectedFiles.length === 0} className="flex-1 py-4 bg-[#2563eb] text-white rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2">
                   {uploading ? <Loader2 className="animate-spin" /> : <Check />}
-                  {uploading ? 'Uploading & Saving...' : 'Complete Event Creation'}
+                  {uploading ? 'Uploading to Drive...' : `Complete Upload (${selectedFiles.length} Photos)`}
                 </button>
                 <button onClick={() => setShowUploadForm(false)} className="px-8 py-4 bg-gray-100 rounded-xl font-bold">Cancel</button>
               </div>
@@ -203,7 +268,6 @@ export default function PhotographerDashboard() {
              {liveEvents.map((event, idx) => (
                <div 
                  key={idx} 
-                 // NAYA: Click handler add kiya hai
                  onClick={() => router.push(`/photographer/event/${encodeURIComponent(event.name)}`)}
                  className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-xl hover:border-[#2563eb] transition-all duration-300 animate-in fade-in zoom-in-95 group"
                >
@@ -214,8 +278,19 @@ export default function PhotographerDashboard() {
                       alt={event.name} 
                     />
                   </div>
-                  <h3 className="font-bold text-gray-900 group-hover:text-[#2563eb] transition-colors">{event.name}</h3>
-                  <p className="text-xs text-gray-500">{event.photos} Photos • {event.clients} Clients notified</p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900 group-hover:text-[#2563eb] transition-colors">{event.name}</h3>
+                      <p className="text-xs text-gray-500">{event.photos} Photos • {event.clients} Clients notified</p>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteEvent(event.name, e)}
+                      className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete Event"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                </div>
              ))}
           </div>
